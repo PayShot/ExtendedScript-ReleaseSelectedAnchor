@@ -1,11 +1,10 @@
 ﻿/* 
  * Title:           Release a selected anchored item.
  * Author:          Ramzi Komati
- * Description:     The script has been modified to release the selected anchored item without disrupting
- *                  inlined page items withing the TextFrame.
+ * Description:     Release a selected anchored item without disrupting its position or page structure
  *
- * Version:         3.0
- * Last Modified:   April 7th, 2014
+ * Version:         3.1
+ * Last Modified:   April 8th, 2014
  */
 
 (function(obj) 
@@ -40,17 +39,43 @@
             selectedItem.locked = false;
         }
 
+        // Calculate the absolute Y geometric bound of the textframe
+        var absoluteY = null;
+        if(selectedItem.rotationAngle != 0)
+        {
+            // Calculate projection of the rotated textframe to the Y-axis
+            var y = selectedItem.geometricBounds[0];
+            var w = selectedItem.visibleBounds[3] - selectedItem.visibleBounds[1];
+            
+            var teta = Math.abs(selectedItem.rotationAngle) * Math.PI / 180;
+            var delta = w * Math.cos(Math.PI / 2 - teta);
+            
+            absoluteY = Math.round(y + delta);
+        }
+        else
+        {
+            absoluteY = selectedItem.geometricBounds[0];
+        }
+    
         // Get the position and dimension of the anchored object
         var anchorGeometricBounds = {
-            x : selectedItem.visibleBounds[1],
-            y : selectedItem.visibleBounds[0],
-            w : selectedItem.visibleBounds[3] - selectedItem.visibleBounds[1],
-            h : selectedItem.visibleBounds[2] - selectedItem.visibleBounds[0],
-            horizontalOffset : selectedItem.visibleBounds[1] - selectedItem.parent.parentTextFrames[0].geometricBounds[1]
+            x : selectedItem.geometricBounds[1],
+            y : absoluteY,
+            w : selectedItem.geometricBounds[3] - selectedItem.geometricBounds[1],
+            h : selectedItem.geometricBounds[2] - selectedItem.geometricBounds[0],
+            horizontalOffset : selectedItem.geometricBounds[1] - selectedItem.parent.parentTextFrames[0].geometricBounds[1]
         };
-        
+    
+        // Release the anchor of the anchored object if it's in a custom position
+        if(selectedItem.anchoredObjectSettings.anchoredPosition == AnchorPosition.ANCHORED)
+        {
+            // Release anchor of the selected object
+            selectedItem.anchoredObjectSettings.anchoredPosition = AnchorPosition.anchored;
+            selectedItem.anchoredObjectSettings.releaseAnchoredObject();
+        }
+    
         // Re-arrange the content of the text frame for inlined and above-lined anchored object
-        if(selectedItem.anchoredObjectSettings.anchoredPosition != AnchorPosition.ANCHORED)
+        else
         {
             // Get the textframe
             var parentTextFrame = selectedItem.parent.parentTextFrames[0];
