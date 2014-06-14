@@ -65,7 +65,8 @@
             h : selectedItem.geometricBounds[2] - selectedItem.geometricBounds[0],
             horizontalOffset : selectedItem.geometricBounds[1] - selectedItem.parent.parentTextFrames[0].geometricBounds[1]
         };
-    
+        
+        selectedItem.textWrapPreferences.textWrapMode = TextWrapModes.BOUNDING_BOX_TEXT_WRAP;
         // Release the anchor of the anchored object if it's in a custom position
         if(selectedItem.anchoredObjectSettings.anchoredPosition == AnchorPosition.ANCHORED)
         {
@@ -91,91 +92,113 @@
             {
                 var character = parentTextFrame.characters[i];
                 
-                
+                // The anchored object marker has been reached
                 if(character.contents.toString().charCodeAt(0) == ANCHOR_MARKER)
                 {
-                    // The anchored object reference ID is the anchored object ID where the anchored 
-                    // marker character is targeting.
-                    var anchoredObjectReferenceID = null;
-                    
-                    if(character.textFrames.length != 0)        anchoredObjectReferenceID = character.textFrames[0].id;
-                    else if(character.polygons.length != 0)     anchoredObjectReferenceID = character.polygons[0].id;
-                    else if(character.rectangles.length != 0)   anchoredObjectReferenceID = character.rectangles[0].id;
-                    else if(character.graphicLines.length != 0) anchoredObjectReferenceID = character.graphicLines[0].id;
-                    else if(character.groups.length != 0)       anchoredObjectReferenceID = character.groups[0].id;
-                    
-                    // Check if the selected anchored object belong to the traversed achored character marker
-                    if(selectedItem.id == anchoredObjectReferenceID)
+                    // Check if the anchored object is inside a story
+                    if(selectedItem.parent.parent instanceof Story || selectedItem.parent.parent instanceof Document)
                     {
-                        if(selectedItem.anchoredObjectSettings.anchoredPosition == AnchorPosition.INLINE_POSITION)
+                        // The anchored object reference ID is the anchored object ID where the anchored 
+                        // marker character is targeting.
+                        var anchoredObjectReferenceID = null;
+                        
+                        if(character.textFrames.length != 0)        anchoredObjectReferenceID = character.textFrames[0].id;
+                        else if(character.polygons.length != 0)     anchoredObjectReferenceID = character.polygons[0].id;
+                        else if(character.rectangles.length != 0)   anchoredObjectReferenceID = character.rectangles[0].id;
+                        else if(character.graphicLines.length != 0) anchoredObjectReferenceID = character.graphicLines[0].id;
+                        else if(character.groups.length != 0)       anchoredObjectReferenceID = character.groups[0].id;
+                        
+                        // Check if the selected anchored object belong to the traversed achored character marker
+                        if(selectedItem.id == anchoredObjectReferenceID)
                         {
-                            var currentLine = character.lines[0];
-                            var previousLine = null, nextLine = null;
-                            
-                            for(l = 0; l < parentTextFrame.lines.length; l++)
+                            if(selectedItem.anchoredObjectSettings.anchoredPosition == AnchorPosition.INLINE_POSITION)
                             {
-                                if(parentTextFrame.lines[l] == currentLine)
+                                var currentLine = character.lines[0];
+                                var firstLine = parentTextFrame.lines[0];
+                                var previousLine = null, nextLine = null;
+                                
+                                for(l = 0; l < parentTextFrame.lines.length; l++)
                                 {
-                                    if(l != 0)
+                                    if(parentTextFrame.lines[l] == currentLine)
                                     {
-                                        previousLine = parentTextFrame.lines[l - 1];
-                                    }
-                                    if(l != parentTextFrame.lines.length - 1)
-                                    {
-                                        nextLine = parentTextFrame.lines[l + 1];
+                                        if(l != 0)
+                                        {
+                                            previousLine = parentTextFrame.lines[l - 1];
+                                        }
+                                        if(l != parentTextFrame.lines.length - 1)
+                                        {
+                                            nextLine = parentTextFrame.lines[l + 1];
+                                        }
                                     }
                                 }
-                            }
-                            
-                            if((currentLine.contents.length == 1 && currentLine.contents[0].toString() == '\r') ||
-                               (currentLine.contents.length == 1 && currentLine.contents[0].toString().charCodeAt(0) == ANCHOR_MARKER) ||
-                               (currentLine.contents.length == 2 && currentLine.contents.toString().charCodeAt(0) == ANCHOR_MARKER && currentLine.contents[1].toString() == '\r'))
-                            {
-                                // Calculate vertical offset
-                                var verticalOffset = anchorGeometricBounds.h + selectedItem.anchoredObjectSettings.anchorYoffset - currentLine.ascent;
-                                if(nextLine != null)
+                                
+                                if((currentLine.contents.length == 1 && currentLine.contents[0].toString() == '\r') ||
+                                   (currentLine.contents.length == 1 && currentLine.contents[0].toString().charCodeAt(0) == ANCHOR_MARKER) ||
+                                   (currentLine.contents.length == 2 && currentLine.contents.toString().charCodeAt(0) == ANCHOR_MARKER && currentLine.contents[1].toString() == '\r'))
                                 {
-                                    nextLine.spaceBefore = verticalOffset;
+                                    // Calculate vertical offset
+                                    var verticalOffset = Math.abs(anchorGeometricBounds.h + selectedItem.anchoredObjectSettings.anchorYoffset - currentLine.ascent);
+                                    if(currentLine == firstLine)
+                                    {
+                                        // alert('First Line')
+                                        parentTextFrame.textFramePreferences.firstBaselineOffset = FirstBaseline.LEADING_OFFSET;
+                                        parentTextFrame.textFramePreferences.minimumFirstBaselineOffset = verticalOffset + currentLine.ascent;
+                                    }
+                                    else
+                                    {
+                                        // alert('Current Line')
+                                        currentLine.spaceBefore = verticalOffset;
+                                    }
+                                
+                                    // Release anchor of the selected object
+                                    selectedItem.anchoredObjectSettings.anchoredPosition = AnchorPosition.anchored;
+                                    selectedItem.anchoredObjectSettings.releaseAnchoredObject();
+
+                                    // Reposition the object to its original state
+                                    selectedItem.move([anchorGeometricBounds.x, anchorGeometricBounds.y]);
                                 }
                                 else
                                 {
-                                    currentLine.spaceBefore = verticalOffset;
-                                }
+                                    // Calculate vertical offset
+                                    var verticalOffset = anchorGeometricBounds.h + selectedItem.anchoredObjectSettings.anchorYoffset - currentLine.pointSize;
+                                    if(verticalOffset > 0)
+                                    {
+                                        currentLine.spaceBefore = verticalOffset;
+                                    }
+                                    else {
+                                        Log.push('verticalOffset < 0');
+                                    }
                             
-                                // Release anchor of the selected object
-                                selectedItem.anchoredObjectSettings.anchoredPosition = AnchorPosition.anchored;
-                                selectedItem.anchoredObjectSettings.releaseAnchoredObject();
+                                    // Release anchor of the selected object
+                                    selectedItem.anchoredObjectSettings.anchoredPosition = AnchorPosition.anchored;
+                                    selectedItem.anchoredObjectSettings.releaseAnchoredObject();
+                                    
+                                    var tabStop = character.tabStops.add();
+                                    tabStop.position = anchorGeometricBounds.horizontalOffset + anchorGeometricBounds.w + 'px';
+                                    
+                                    character.contents = '\t' + character.contents;
 
-                                // Reposition the object to its original state
-                                selectedItem.move([anchorGeometricBounds.x, anchorGeometricBounds.y]);
-                            }
-                            else
-                            {
-                                // Calculate vertical offset
-                                var verticalOffset = anchorGeometricBounds.h + selectedItem.anchoredObjectSettings.anchorYoffset - currentLine.pointSize;
-                                if(verticalOffset > 0)
+                                    // Reposition the object to its original state
+                                    selectedItem.move([anchorGeometricBounds.x, anchorGeometricBounds.y]);
+                                }
+                                // Send the previously anchored object back to its textframe
+                                try
                                 {
-                                    currentLine.spaceBefore = verticalOffset;
+                                    selectedItem.sendToBack(parentTextFrame);
                                 }
-                                else {
-                                    alert('y');
-                                }
-                        
-                                // Release anchor of the selected object
-                                selectedItem.anchoredObjectSettings.anchoredPosition = AnchorPosition.anchored;
-                                selectedItem.anchoredObjectSettings.releaseAnchoredObject();
-                                
-                                var tabStop = character.tabStops.add();
-                                tabStop.position = anchorGeometricBounds.horizontalOffset + anchorGeometricBounds.w + 'px';
-                                
-                                character.contents = '\t' + character.contents;
-
-                                // Reposition the object to its original state
-                                selectedItem.move([anchorGeometricBounds.x, anchorGeometricBounds.y]);
+                                catch(e) { }
                             }
-                            // Send the previously anchored object back to its textframe
-                            selectedItem.sendToBack(parentTextFrame);
                         }
+                    }
+                
+                    // Check if the anchored object is inside a story
+                    else if(selectedItem.parent.parent instanceof Cell)
+                    {
+                        Log.push('Anchored item found inside a cell.')
+                    }
+                    else
+                    {
+                        Log.push('Anchored item found inside a ' + selectedItem.parent.parent.reflect.name + '.');
                     }
                 }
             }
